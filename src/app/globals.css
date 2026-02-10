@@ -1,26 +1,82 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer theme {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --primary-white: #FFFFFF;
+    --off-white: #F8FAFC;
+    --light-gray: #F1F5F9;
+    --muted-charcoal: #64748B;
+    --dark-charcoal: #1E293B;
+
+    /* Medical Theme Colors */
+    --soft-blue: #4A90E2;
+    --soft-blue-light: #E8F4F8;
+    --medical-green: #81C784;
+    --medical-green-light: #E8F5E9;
+    --professional-gray: #4A5568;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, #4A90E2 0%, #81C784 100%);
+    --gradient-soft: linear-gradient(to bottom, #FFFFFF 0%, #E8F4F8 100%);
   }
 }
 
+@theme {
+  --color-primary-white: var(--primary-white);
+  --color-off-white: var(--off-white);
+  --color-light-gray: var(--light-gray);
+  --color-muted-charcoal: var(--muted-charcoal);
+  --color-dark-charcoal: var(--dark-charcoal);
+
+  --color-soft-blue: var(--soft-blue);
+  --color-soft-blue-light: var(--soft-blue-light);
+  --color-medical-green: var(--medical-green);
+  --color-medical-green-light: var(--medical-green-light);
+
+  --image-gradient-primary: var(--gradient-primary);
+  --image-gradient-soft: var(--gradient-soft);
+
+  --font-heading: var(--font-inter);
+  --font-body: var(--font-inter);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--primary-white);
+  color: var(--dark-charcoal);
+  font-family: var(--font-body), sans-serif;
+  background-image: var(--gradient-soft);
+  background-attachment: fixed;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+.animate-slide-in {
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+/* Scroll Animations */
+.scroll-fade-in {
+  opacity: 0;
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  transform: translateY(20px);
+}
+
+.scroll-fade-in.is-visible {
+  opacity: 1;
+  transform: translateY(0);
 }
