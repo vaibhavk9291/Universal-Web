@@ -1,14 +1,15 @@
 "use client";
 
+import { GoogleGenAI } from "@google/genai";
+import { motion, AnimatePresence } from "framer-motion";
 import React, { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Sparkles } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 
 // Gemini API Configuration
 const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyAmP2jEFRjhUAWkFkubjkwUgYoZLvSkrus';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent';
+// const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent';
 
-const SYSTEM_CONTEXT = `You are a helpful assistant for a healthcare clinic that provides Ayurvedic, Dental, and Skincare services. 
+const SYSTEM_CONTEXT = `You are a helpful assistant for a healthcare clinic that provides Ayurvedic, Dental, and Skincare services.
 
 Your role is to:
 - Answer questions about our services, treatments, and procedures
@@ -26,6 +27,44 @@ Clinic Services:
 
 Be concise, friendly, and professional in all responses.`;
 
+const CLINIC_KNOWLEDGE = `
+Clinic Name: AyuSmile Wellness Clinic
+Location: Pune, Maharashtra
+Timings: Monday to Saturday, 9:00 AM to 7:00 PM
+Contact: +91-9876543210
+Email: care@ayusmileclinic.com
+
+--- SERVICES ---
+
+Ayurvedic Treatments:
+- Panchakarma Therapy (₹12,000)
+- Herbal Detox (₹3,500)
+- Stress Relief Therapy (₹4,500)
+
+Dental Services:
+- Dental Cleaning (₹1,200)
+- Tooth Filling (₹1,800)
+- Root Canal Treatment (₹6,000)
+- Braces (₹45,000)
+
+Skincare Treatments:
+- Acne Treatment (₹3,000)
+- Chemical Peel (₹4,000)
+- Laser Acne Treatment (₹7,500)
+- Anti-Aging Therapy (₹6,500)
+
+--- DOCTORS ---
+
+Dr. Mehta (BAMS, 15 years experience - Ayurveda Specialist)
+Dr. Sharma (BDS, Cosmetic Dentist - 10 years experience)
+Dr. Kapoor (Dermatologist - 8 years experience)
+
+Appointments:
+- Booking available via phone call
+- Walk-ins allowed based on availability
+- Online booking coming soon
+`;
+
 interface Message {
     role: 'bot' | 'user';
     text: string;
@@ -40,6 +79,10 @@ export function Chatbot() {
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
+    const ai = new GoogleGenAI({
+        apiKey: GEMINI_API_KEY,
+    });
+
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
@@ -48,77 +91,40 @@ export function Chatbot() {
         scrollToBottom();
     }, [messages, isLoading]);
 
-    // Debug: List available models
-    useEffect(() => {
-        const checkModels = async () => {
-            try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`);
-                const data = await response.json();
-                console.log("Available Gemini Models:", data);
-            } catch (e) {
-                console.error("Failed to list models:", e);
-            }
-        };
-        checkModels();
-    }, []);
-
     const sendMessageToGemini = async (userMessage: string, history: Message[]) => {
         try {
-            // Convert history to Gemini format
-            const historyParts = history.map(msg => ({
-                role: msg.role === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.text }]
-            }));
+            // Convert chat history into text conversation
+            const conversationHistory = history
+                .map((msg) => `${msg.role === "user" ? "User" : "Assistant"}: ${msg.text}`)
+                .join("\n");
 
-            const payload = {
-                contents: [
-                    { role: 'user', parts: [{ text: SYSTEM_CONTEXT }] },
-                    { role: 'model', parts: [{ text: 'Understood. I will assist patients with information about our clinic services professionally and helpfully.' }] },
-                    ...historyParts,
-                    { role: 'user', parts: [{ text: userMessage }] }
-                ],
-                generationConfig: {
-                    temperature: 0.7,
-                    topK: 40,
-                    topP: 0.95,
-                    maxOutputTokens: 1024,
+            const fullPrompt = `
+                ${SYSTEM_CONTEXT}
+
+                Clinic Knowledge Base:
+                ${CLINIC_KNOWLEDGE}
+
+                Conversation:
+                ${conversationHistory}
+
+                User: ${userMessage}
+                Assistant:
+                `;
+
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: fullPrompt,
+                config: {
+                    temperature: 0.6,
+                    maxOutputTokens: 600,
                 },
-                safetySettings: [
-                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-                ]
-            };
-
-            const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
             });
 
-            const data = await response.json();
-            console.log("Gemini API Response:", data); // Debug log
-
-            if (data.error) {
-                console.error("Gemini API Error details:", data.error);
-                throw new Error(data.error.message || 'API Error');
-            }
-
-            if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-                return data.candidates[0].content.parts[0].text;
-            } else {
-                console.error("Unexpected response structure:", data);
-                // Handle safety ratings blocking response
-                if (data.promptFeedback && data.promptFeedback.blockReason) {
-                    return "I apologize, but I cannot answer that question due to safety guidelines.";
-                }
-                throw new Error('Invalid response from Gemini API');
-            }
+            return response.text ?? "I'm sorry, I couldn't respond properly.";
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
-            console.error('Gemini API Integration Error:', error);
-            // Return a friendly message instead of crashing
-            return `System Error: ${error.message || "Unavailable"}. Please contact support.`;
+            console.error("Gemini SDK Error:", error);
+            return "System Error. Please try again later.";
         }
     };
 
@@ -149,10 +155,10 @@ export function Chatbot() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 20, scale: 0.95 }}
                         transition={{ duration: 0.2 }}
-                        className="fixed bottom-24 right-4 md:right-8 w-[90vw] md:w-[380px] bg-white rounded-2xl shadow-2xl border border-neutral-100 z-50 flex flex-col overflow-hidden max-h-[600px] h-[70vh]"
+                        className="fixed bottom-24 right-4 md:right-8 w-[90vw] md:w-95 bg-white rounded-2xl shadow-2xl border border-neutral-100 z-50 flex flex-col overflow-hidden max-h-150 h-[70vh]"
                     >
                         {/* Header */}
-                        <div className="p-4 bg-gradient-to-r from-soft-blue to-purple-600 text-white flex justify-between items-center shrink-0">
+                        <div className="p-4 bg-linear-to-r from-soft-blue to-purple-600 text-white flex justify-between items-center shrink-0">
                             <div className="flex items-center gap-2">
                                 <div className="bg-white/20 p-1.5 rounded-full">
                                     <Sparkles size={18} className="text-white" />
@@ -182,7 +188,7 @@ export function Chatbot() {
                                 >
                                     <div
                                         className={`max-w-[85%] p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.role === 'user'
-                                            ? 'bg-gradient-to-r from-soft-blue to-purple-600 text-white rounded-br-none'
+                                            ? 'bg-linear-to-r from-soft-blue to-purple-600 text-white rounded-br-none'
                                             : 'bg-white text-dark-charcoal border border-neutral-100 rounded-bl-none'
                                             }`}
                                     >
@@ -235,8 +241,9 @@ export function Chatbot() {
             </AnimatePresence>
 
             <button
+                suppressHydrationWarning
                 onClick={() => setIsOpen(!isOpen)}
-                className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-soft-blue to-purple-600 hover:shadow-lg hover:shadow-soft-blue/25 text-white rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-50 group"
+                className="fixed bottom-6 right-6 w-14 h-14 bg-linear-to-r from-soft-blue to-purple-600 hover:shadow-lg hover:shadow-soft-blue/25 text-white rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-50 group"
             >
                 <AnimatePresence mode="wait">
                     {isOpen ? (
